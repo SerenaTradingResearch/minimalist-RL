@@ -1,12 +1,9 @@
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 import torch as tc
 import torch.nn as nn
-
-
-def transpose(matrix: List[List]):
-    return list(zip(*matrix))
+from trading_models.utils import shape, tensor
 
 
 def set_seed(x=0):
@@ -21,32 +18,50 @@ def mlp(sizes, Act=nn.Tanh, out=[]):
     return nn.Sequential(*layers[:-1], *out)
 
 
-class RLData:
+class ActMap:
+    @staticmethod
+    def from_tanh(tanh, low, high):
+        return (tanh + 1) / 2 * (high - low) + low
+
+    @staticmethod
+    def to_tanh(x, low, high):
+        return (x - low) / (high - low) * 2 - 1
+
+
+class DataBuffer:
     def __repr__(s):
-        return f"ptr: {s.ptr}, size: {s.size}, cap: {s.cap}, keys: {s.keys}"
+        return f"ptr: {s.ptr}, size: {s.size}/{s.cap} {shape(s._data)}"
 
-    def __init__(s, data: Dict = {}, cap=0, obs_dim=1, act_dim=1):
-        def zeros(dim) -> tc.Tensor:
-            return np.zeros((cap, dim), dtype=np.float32)
+    def __init__(s, data: Dict[str, tc.Tensor] = None, cap=1e6):
+        s._data, s.cap = data or {}, int(cap)
+        s.ptr, s.size = 0, 0
+        if len(s._data):
+            v0 = list(data.values())[0]
+            s.cap = s.size = len(v0)
 
-        if cap:
-            s.obs = zeros(obs_dim)
-            s.obs2 = zeros(obs_dim)
-            s.act = zeros(act_dim)
-            s.rew = zeros(1)
-            s.done = zeros(1)
-        s.__dict__.update(data)
-        s.keys = list(s.__dict__.keys())
-        s.ptr = 0
-        s.size = len(data.get("obs", []))
-        s.cap = s.size or cap
+    def __getattr__(s, k):
+        return s._data[k][: s.size]
 
-    def store(s, data: Dict):
-        for k, v in data.items():
-            getattr(s, k)[s.ptr] = v
+    def dict(s):
+        return {k: v[: s.size] for k, v in s._data.items()}
+
+    def push(s, row: Dict):
+        for k, v in row.items():
+            if k not in s._data:
+                shape = () if np.isscalar(v) else v.shape
+                s._data[k] = np.full((s.cap, *shape), np.nan, dtype=np.float32)
+            s._data[k][s.ptr] = v
         s.ptr = (s.ptr + 1) % s.cap
         s.size = min(s.size + 1, s.cap)
 
-    def sample(s, n=32):
-        idx = np.random.randint(0, s.size, n) if s.size else None
-        return RLData({k: getattr(s, k)[idx] for k in s.keys})
+    def sample(s, n=100):
+        idx = np.random.randint(0, s.size, (n,)) if s.size else None
+        return DataBuffer(tensor({k: v[idx] for k, v in s._data.items()}))
+
+
+class RLData(DataBuffer):
+    obs: tc.Tensor
+    obs2: tc.Tensor
+    act: tc.Tensor
+    rew: tc.Tensor
+    done: tc.Tensor
