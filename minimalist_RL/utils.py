@@ -90,7 +90,9 @@ def train_RL(
         obs, score = obs2, score + rew
         if term or trunc:
             records.push(dict(score=score, step=t, is_rand_act=t < rand_steps))
-            plot_general(records.dict(), env.spec.id)
+            id = env.spec.id if env.spec else env.__class__.__name__
+            plot_general(records.dict(), id)
+            print(f"step: {t}, score: {score}")
             obs, score = env.reset()[0], 0
         if t and t % batch_size == 0:
             for _ in range(batch_size):

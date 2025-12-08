@@ -4,3 +4,4 @@ __pycache__
 dist
 *.pkl
 archive
+.vscode
