@@ -74,10 +74,12 @@ def train_RL(
     steps=1e6,
     rand_steps=1e3,
     batch_size=100,
+    get_test_score=lambda: np.nan,
+    f_test=100,
 ):
     sp = env.action_space
     obs = env.reset()[0]
-    data, records, score = RLData(), RLData(), 0
+    data, hist, ep_hist, score = RLData(), RLData(), RLData(), 0
     for t in range(int(steps)):
         if t < rand_steps:
             env_act = sp.sample()
@@ -85,15 +87,20 @@ def train_RL(
         else:
             act = get_tanh_act(obs)
             env_act = ActMap.from_tanh(act, sp.low, sp.high)
-        obs2, rew, term, trunc, _ = env.step(env_act)
+        obs2, rew, term, trunc, info = env.step(env_act)
         data.push(dict(obs=obs, obs2=obs2, act=act, rew=rew, done=term))
+        ep_hist.push(info)
         obs, score = obs2, score + rew
         if term or trunc:
-            records.push(dict(score=score, step=t, is_rand_act=t < rand_steps))
+            test_score = get_test_score() if hist.size % f_test == 0 else np.nan
+            h = dict(
+                score=score, test_score=test_score, step=t, is_rand_act=t < rand_steps
+            )
+            hist.push(h)
             id = env.spec.id if env.spec else env.__class__.__name__
-            plot_general(records.dict(), id)
+            plot_general({**hist.dict(), **ep_hist.dict()}, id)
             print(f"step: {t}, score: {score}")
-            obs, score = env.reset()[0], 0
+            obs, ep_hist, score = env.reset()[0], RLData(), 0
         if t and t % batch_size == 0:
             for _ in range(batch_size):
                 update_model(data.sample(batch_size))
