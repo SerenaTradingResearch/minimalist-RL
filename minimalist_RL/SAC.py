@@ -47,10 +47,18 @@ class QFunc(nn.Module):
 
 
 class ActorCritic(nn.Module):
-    def __init__(s, env: gym.Env, sizes=[256, 256], Act=nn.Tanh):
+    def __init__(
+        s,
+        env: gym.Env = None,
+        sizes=[256, 256],
+        Act=nn.Tanh,
+        obs_dim=None,
+        act_dim=None,
+    ):
         super().__init__()
-        obs_dim = env.observation_space.shape[0]
-        act_dim = env.action_space.shape[0]
+        if env:
+            obs_dim = env.observation_space.shape[0]
+            act_dim = env.action_space.shape[0]
         s.pi = NormalActor([obs_dim, *sizes, act_dim], Act)
         s.q1 = QFunc(mlp([obs_dim + act_dim, *sizes, 1], Act))
         s.q2 = deepcopy(s.q1)
@@ -60,18 +68,14 @@ class ActorCritic(nn.Module):
 
 
 class SAC:
-    gamma = 0.99
-    alpha = 0.2
-    lr = 1e-3
-    polyak = 0.995
-
-    def __init__(s, ac: ActorCritic):
+    def __init__(s, ac: ActorCritic, lr=1e-3, gamma=0.99, alpha=0.2, polyak=0.995):
+        s.gamma, s.alpha, s.polyak = gamma, alpha, polyak
         s.ac, s.ac_tar = ac, deepcopy(ac)
         for p in s.ac_tar.parameters():
             p.requires_grad = False
-        s.pi_opt = tc.optim.Adam(ac.pi.parameters(), s.lr)
+        s.pi_opt = tc.optim.Adam(ac.pi.parameters(), lr)
         s.q_params = itertools.chain(ac.q1.parameters(), ac.q2.parameters())
-        s.q_opt = tc.optim.Adam(s.q_params, s.lr)
+        s.q_opt = tc.optim.Adam(s.q_params, lr)
 
     def q_loss(s, d: RLData):
         with tc.no_grad():
