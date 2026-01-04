@@ -3,7 +3,7 @@
 
 - `Minimalist` & `Decoupled` Reinforcement Learning
 
-![](https://raw.githubusercontent.com/SerenaTradingResearch/minimalist-RL/main/test/SAC_HalfCheetah-v5.png)
+![](https://raw.githubusercontent.com/NeuroAI-Research/minimalist-RL/main/test/SAC_HalfCheetah-v5.png)
 
 ## Usage
 
